@@ -1,0 +1,39 @@
+@page "/minha-conta"
+@attribute [Authorize]
+@inject AuthenticationService Authentication
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject NavigationManager Navigation
+@inject IHttpContextAccessor HttpContextAccessor
+
+<PageTitle>Minha conta · Nutriê Gestão</PageTitle>
+
+<section class="page-heading"><div><p class="eyebrow">ACESSO</p><h1>Minha conta</h1><p>@NomeUsuario</p></div></section>
+@if (!string.IsNullOrWhiteSpace(Feedback)) { <div class="feedback @(FeedbackIsError ? "feedback-error" : "feedback-success")" role="status">@Feedback</div> }
+<section class="content-grid"><article class="panel settings-card"><p class="eyebrow">SEGURANÇA</p><h2>Alterar senha</h2><EditForm Model="Senha" OnValidSubmit="Salvar"><div class="form-grid"><label class="full">Senha atual *<InputText @bind-Value="Senha.Atual" type="password" autocomplete="current-password" maxlength="128" /></label><label>Nova senha *<InputText @bind-Value="Senha.Nova" type="password" autocomplete="new-password" maxlength="128" /><small>Ao menos 9 caracteres, com letras e números.</small></label><label>Confirmar nova senha *<InputText @bind-Value="Senha.Confirmacao" type="password" autocomplete="new-password" maxlength="128" /></label></div><div class="editor-actions"><button type="submit" class="button button-primary">Alterar senha</button></div></EditForm></article></section>
+
+@code {
+    [PersistentState] public Guid UsuarioId { get; set; }
+    [PersistentState] public string? NomeUsuario { get; set; }
+    private SenhaEdicao Senha { get; } = new();
+    private string? Feedback { get; set; }
+    private bool FeedbackIsError { get; set; }
+    protected override async Task OnInitializedAsync()
+    {
+        if (UsuarioId == Guid.Empty && Guid.TryParse(HttpContextAccessor.HttpContext?.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, out var usuarioDoContexto))
+            UsuarioId = usuarioDoContexto;
+        if (string.IsNullOrWhiteSpace(NomeUsuario)) NomeUsuario = HttpContextAccessor.HttpContext?.User.Identity?.Name ?? string.Empty;
+        if (UsuarioId == Guid.Empty)
+        {
+            var estado = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            if (Guid.TryParse(estado.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, out var usuarioDoEstado)) UsuarioId = usuarioDoEstado;
+            NomeUsuario = estado.User.Identity?.Name ?? NomeUsuario;
+        }
+    }
+    private void Salvar()
+    {
+        var resultado = Authentication.AlterarPropriaSenha(UsuarioId, Senha.Atual, Senha.Nova, Senha.Confirmacao);
+        Feedback = resultado.Message; FeedbackIsError = !resultado.Success;
+        if (resultado.Success) Navigation.NavigateTo("/entrar?mensagem=senha-alterada", forceLoad: true);
+    }
+    private sealed class SenhaEdicao { public string Atual { get; set; } = string.Empty; public string Nova { get; set; } = string.Empty; public string Confirmacao { get; set; } = string.Empty; }
+}

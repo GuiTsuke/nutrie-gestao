@@ -1,0 +1,5 @@
+<Solution>
+  <Project Path="NutrieGestao.Core/NutrieGestao.Core.csproj" />
+  <Project Path="NutrieGestao.Web/NutrieGestao.Web.csproj" />
+  <Project Path="NutrieGestao/NutrieGestao.csproj" />
+</Solution>

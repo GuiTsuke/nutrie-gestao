@@ -1,0 +1,85 @@
+@inherits LayoutComponentBase
+@inject DataService Data
+
+<div class="app-shell">
+    <aside class="sidebar" aria-label="Navegação principal">
+        <a class="brand" href="/" aria-label="Nutriê Gestão, ir para o painel">
+            <span class="brand-mark" aria-hidden="true">N</span>
+            <span><strong>Nutriê</strong><small>GESTÃO</small></span>
+        </a>
+
+        <nav class="navigation" aria-label="Módulos">
+            <NavLink href="/" Match="NavLinkMatch.All" class="nav-link">
+                <span class="nav-icon icon-dashboard" aria-hidden="true"></span><span class="nav-label">Dashboard</span>
+            </NavLink>
+            <NavLink href="pedidos" class="nav-link"><span class="nav-icon icon-orders" aria-hidden="true"></span><span class="nav-label">Pedidos</span></NavLink>
+            <NavLink href="clientes" class="nav-link"><span class="nav-icon icon-customers" aria-hidden="true"></span><span class="nav-label">Clientes</span></NavLink>
+            <NavLink href="marmitas" class="nav-link"><span class="nav-icon icon-meals" aria-hidden="true"></span><span class="nav-label">Marmitas</span></NavLink>
+            <NavLink href="rentabilidade" class="nav-link"><span class="nav-icon icon-profitability" aria-hidden="true"></span><span class="nav-label">Rentabilidade</span></NavLink>
+            <NavLink href="consultas" class="nav-link"><span class="nav-icon icon-consultations" aria-hidden="true"></span><span class="nav-label">Consultas</span></NavLink>
+            <NavLink href="minha-conta" class="nav-link"><span class="nav-icon icon-settings" aria-hidden="true"></span><span class="nav-label">Minha conta</span></NavLink>
+            <NavLink href="usuarios" class="nav-link"><span class="nav-icon icon-customers" aria-hidden="true"></span><span class="nav-label">Usuários</span></NavLink>
+            <NavLink href="configuracoes" class="nav-link"><span class="nav-icon icon-settings" aria-hidden="true"></span><span class="nav-label">Configurações</span></NavLink>
+        </nav>
+
+        <div class="sidebar-footer">
+            <span class="company-avatar">@InitialEmpresa</span>
+            <div><strong>@NomeEmpresa</strong><small>Versão web · MVP</small></div>
+            <a class="sidebar-logout" href="/sair" data-enhance-nav="false">Sair</a>
+        </div>
+    </aside>
+
+    <main class="main-content">
+        <header class="mobile-header">
+            <a class="brand" href="/" @onclick="FecharMenuMobile"><span class="brand-mark">N</span><strong>Nutriê</strong></a>
+            <div class="mobile-header-actions">
+                <span class="mobile-label">Gestão</span>
+                <button class="mobile-menu-toggle" type="button" @onclick="AlternarMenuMobile" aria-label="@(MenuMobileAberto ? "Fechar menu" : "Abrir menu")" aria-expanded="@(MenuMobileAberto ? "true" : "false")" aria-controls="mobile-navigation">
+                    <span class="mobile-menu-icon" aria-hidden="true"></span>
+                </button>
+            </div>
+        </header>
+        @if (MenuMobileAberto)
+        {
+            <div class="mobile-menu-backdrop" @onclick="FecharMenuMobile">
+                <section class="mobile-menu-panel" @onclick:stopPropagation="true" aria-label="Menu principal">
+                    <div class="mobile-menu-heading">
+                        <div><p class="eyebrow">NAVEGAÇÃO</p><h2>Menu</h2></div>
+                        <button class="icon-button" type="button" @onclick="FecharMenuMobile" aria-label="Fechar menu"><span class="mobile-close-icon" aria-hidden="true"></span></button>
+                    </div>
+                    <nav id="mobile-navigation" class="mobile-navigation" aria-label="Módulos">
+                        <NavLink href="/" Match="NavLinkMatch.All" class="nav-link" @onclick="FecharMenuMobile"><span class="nav-icon icon-dashboard" aria-hidden="true"></span><span class="nav-label">Dashboard</span></NavLink>
+                        <NavLink href="pedidos" class="nav-link" @onclick="FecharMenuMobile"><span class="nav-icon icon-orders" aria-hidden="true"></span><span class="nav-label">Pedidos</span></NavLink>
+                        <NavLink href="clientes" class="nav-link" @onclick="FecharMenuMobile"><span class="nav-icon icon-customers" aria-hidden="true"></span><span class="nav-label">Clientes</span></NavLink>
+                        <NavLink href="marmitas" class="nav-link" @onclick="FecharMenuMobile"><span class="nav-icon icon-meals" aria-hidden="true"></span><span class="nav-label">Marmitas</span></NavLink>
+                        <NavLink href="rentabilidade" class="nav-link" @onclick="FecharMenuMobile"><span class="nav-icon icon-profitability" aria-hidden="true"></span><span class="nav-label">Rentabilidade</span></NavLink>
+                        <NavLink href="consultas" class="nav-link" @onclick="FecharMenuMobile"><span class="nav-icon icon-consultations" aria-hidden="true"></span><span class="nav-label">Consultas</span></NavLink>
+                        <NavLink href="minha-conta" class="nav-link" @onclick="FecharMenuMobile"><span class="nav-icon icon-settings" aria-hidden="true"></span><span class="nav-label">Minha conta</span></NavLink>
+                        <NavLink href="usuarios" class="nav-link" @onclick="FecharMenuMobile"><span class="nav-icon icon-customers" aria-hidden="true"></span><span class="nav-label">Usuários</span></NavLink>
+                        <NavLink href="configuracoes" class="nav-link" @onclick="FecharMenuMobile"><span class="nav-icon icon-settings" aria-hidden="true"></span><span class="nav-label">Configurações</span></NavLink>
+                        <a class="nav-link mobile-logout" href="/sair"><span class="nav-label">Sair</span></a>
+                    </nav>
+                </section>
+            </div>
+        }
+        @Body
+    </main>
+</div>
+
+<div id="blazor-error-ui" data-nosnippet>
+    Não foi possível atualizar a tela. <a href="." class="reload">Recarregar</a>
+</div>
+
+@code {
+    private string NomeEmpresa { get; set; } = "Nutriê Gestão";
+    private bool MenuMobileAberto { get; set; }
+    private string InitialEmpresa => NomeEmpresa[..1].ToUpperInvariant();
+
+    private void AlternarMenuMobile() => MenuMobileAberto = !MenuMobileAberto;
+    private void FecharMenuMobile() => MenuMobileAberto = false;
+
+    protected override void OnInitialized()
+    {
+        NomeEmpresa = Data.LoadEmpresa()?.Nome ?? NomeEmpresa;
+    }
+}

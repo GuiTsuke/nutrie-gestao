@@ -1,0 +1,89 @@
+@page "/primeiro-acesso"
+@attribute [AllowAnonymous]
+@attribute [ExcludeFromInteractiveRouting]
+@layout AuthLayout
+@inject AuthenticationService Authentication
+
+<PageTitle>Primeiro acesso · Nutriê Gestão</PageTitle>
+
+<div class="auth-brand" aria-label="Nutriê Gestão">
+    <span class="brand-mark" aria-hidden="true">N</span>
+    <span><strong>Nutriê</strong><small>GESTÃO</small></span>
+</div>
+
+@if (!Authentication.ConfiguracaoInicialDisponivel())
+{
+    <div class="auth-heading">
+        <p class="eyebrow">ACESSO JÁ CONFIGURADO</p>
+        <h1>Conta administradora criada</h1>
+        <p>Use suas credenciais para entrar na gestão.</p>
+    </div>
+    <a class="button button-primary auth-submit" href="/entrar" data-enhance-nav="false">Ir para o acesso</a>
+}
+else if (!Authentication.TemCodigoDeAtivacao())
+{
+    <div class="auth-heading">
+        <p class="eyebrow">CONFIGURAÇÃO NECESSÁRIA</p>
+        <h1>Primeiro acesso protegido</h1>
+        <p>Defina o código de ativação no servidor antes de criar a conta administradora.</p>
+    </div>
+    <a class="auth-back-link" href="/entrar" data-enhance-nav="false">Voltar para o acesso</a>
+}
+else
+{
+    <div class="auth-heading">
+        <p class="eyebrow">PRIMEIRO ACESSO</p>
+        <h1>Crie a conta administradora</h1>
+        <p>Esta conta terá acesso à gestão da empresa.</p>
+    </div>
+
+    @if (MensagemErro is not null)
+    {
+        <div class="auth-feedback" role="alert">@MensagemErro</div>
+    }
+
+    <form method="post" action="/auth/primeiro-acesso" class="auth-form" data-enhance="false">
+        <AntiforgeryToken />
+        <label>
+            Nome
+            <input name="nome" type="text" autocomplete="name" maxlength="120" required autofocus />
+        </label>
+        <label>
+            Usuário
+            <input name="usuario" type="text" autocomplete="username" minlength="3" maxlength="40" required />
+            <small>Use letras, números, ponto, hífen ou sublinhado.</small>
+        </label>
+        <label>
+            E-mail
+            <input name="email" type="email" inputmode="email" autocomplete="email" maxlength="180" oninput="this.value = this.value.trim().toLowerCase()" required />
+        </label>
+        <label>
+            Senha
+            <input name="senha" type="password" autocomplete="new-password" minlength="9" maxlength="128" required />
+            <small>Use pelo menos 9 caracteres.</small>
+        </label>
+        <label>
+            Confirmar senha
+            <input name="confirmacaoSenha" type="password" autocomplete="new-password" minlength="9" maxlength="128" required />
+        </label>
+        <label>
+            Código de ativação
+            <input name="codigoDeAtivacao" type="password" autocomplete="one-time-code" required />
+        </label>
+        <button class="button button-primary auth-submit" type="submit">Criar conta e entrar</button>
+    </form>
+    <a class="auth-back-link" href="/entrar" data-enhance-nav="false">Voltar para o acesso</a>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "erro")]
+    private string? Erro { get; set; }
+
+    private string? MensagemErro => Erro switch
+    {
+        "solicitacao" => "Não foi possível validar a solicitação. Atualize a página e tente novamente.",
+        "validacao" => "Verifique os dados, a confirmação de senha e o código de ativação.",
+        "limite" => "Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.",
+        _ => null
+    };
+}

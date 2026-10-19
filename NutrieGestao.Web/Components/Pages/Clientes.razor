@@ -1,0 +1,101 @@
+@page "/clientes"
+@attribute [Authorize]
+@inject DataService Data
+@inject ManagementService Management
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Clientes · Nutriê Gestão</PageTitle>
+
+<section class="page-heading">
+    <div><p class="eyebrow">CADASTROS</p><h1>Clientes</h1><p>Gerencie seus clientes e informações de contato.</p></div>
+    <button class="button button-primary" @onclick="NovoCliente">+ Novo cliente</button>
+</section>
+
+@if (!string.IsNullOrWhiteSpace(Feedback))
+{
+    <div class="feedback @(FeedbackIsError ? "feedback-error" : "feedback-success")" role="status">@Feedback</div>
+}
+
+<section class="content-grid @(Editando is not null ? "has-editor" : string.Empty)">
+    <article class="panel">
+        <div class="list-toolbar"><div class="search-field"><span aria-hidden="true">⌕</span><input @bind="Busca" @bind:event="oninput" placeholder="Buscar por nome ou telefone" aria-label="Buscar cliente" /></div><span class="muted">@Filtrados.Count() cliente(s)</span></div>
+        @if (!Filtrados.Any())
+        {
+            <div class="empty-state"><strong>Nenhum cliente encontrado.</strong><span>Cadastre o primeiro cliente para começar.</span></div>
+        }
+        else
+        {
+            <div class="table-wrap"><table><thead><tr><th>Nome</th><th>Telefone</th><th>WhatsApp</th><th>Cidade</th><th>Cadastro</th><th>Cadastrado por</th><th></th></tr></thead><tbody>
+                @foreach (var cliente in Filtrados)
+                {
+                    <tr><td><strong>@cliente.Nome</strong></td><td>@cliente.Telefone</td><td>@cliente.WhatsApp</td><td>@cliente.Cidade</td><td>@cliente.DataCadastro.ToString("dd/MM/yyyy")</td><td>@NomeCriador(cliente.CriadoPorNome)</td><td class="actions"><button class="text-button" @onclick="() => Editar(cliente)">Editar</button><button class="text-button danger" @onclick="() => PedirExclusao(cliente)">Excluir</button></td></tr>
+                }
+            </tbody></table></div>
+        }
+    </article>
+
+    @if (Editando is not null)
+    {
+        <aside class="panel editor-panel"><div class="editor-heading"><h2>@(Editando.Id == Guid.Empty ? "Novo cliente" : "Editar cliente")</h2><button type="button" class="icon-button" @onclick="FecharEditor" aria-label="Fechar">×</button></div>
+            <EditForm Model="Editando" OnValidSubmit="Salvar"><div class="form-grid"><label class="full">Nome *<InputText @bind-Value="Editando.Nome" maxlength="120" /></label><label>Telefone<input value="@TelefoneFormatado" @oninput="AtualizarTelefone" type="tel" inputmode="tel" maxlength="15" data-phone-mask placeholder="(00) 00000-0000" /></label><label>WhatsApp<input value="@WhatsAppFormatado" @oninput="AtualizarWhatsApp" type="tel" inputmode="tel" maxlength="15" data-phone-mask placeholder="(00) 00000-0000" /></label><label class="full">Endereço<InputText @bind-Value="Editando.Endereco" maxlength="180" /></label><label>Número<InputText @bind-Value="Editando.Numero" maxlength="20" /></label><label>Complemento<InputText @bind-Value="Editando.Complemento" maxlength="120" /></label><label>Bairro<InputText @bind-Value="Editando.Bairro" maxlength="100" /></label><label>Cidade<InputText @bind-Value="Editando.Cidade" maxlength="100" /></label><label class="full">Observações<InputTextArea @bind-Value="Editando.Observacoes" maxlength="1000" /></label></div><div class="editor-actions"><button type="button" class="button button-quiet" @onclick="FecharEditor">Cancelar</button><button type="submit" class="button button-primary">Salvar cliente</button></div></EditForm>
+        </aside>
+    }
+</section>
+
+@if (Excluir is not null)
+{
+    <div class="modal-backdrop"><section class="confirm-dialog" role="alertdialog" aria-modal="true"><p class="eyebrow">CONFIRMAR EXCLUSÃO</p><h2>Excluir @Excluir.Nome?</h2><p>Esta ação não pode ser desfeita.</p><div><button class="button button-quiet" @onclick="() => Excluir = null">Cancelar</button><button class="button button-danger" @onclick="ConfirmarExclusao">Excluir cliente</button></div></section></div>
+}
+
+@code {
+    private List<Cliente> ListaClientes { get; set; } = [];
+    private Cliente? Editando { get; set; }
+    private Cliente? Excluir { get; set; }
+    private string Busca { get; set; } = string.Empty;
+    private string? Feedback { get; set; }
+    private bool FeedbackIsError { get; set; }
+    private Guid? UsuarioAtualId { get; set; }
+    private string UsuarioAtualNome { get; set; } = string.Empty;
+    private string TelefoneFormatado
+    {
+        get => Editando?.Telefone ?? string.Empty;
+        set { if (Editando is not null) Editando.Telefone = FormatacaoCadastro.FormatarTelefone(value); }
+    }
+    private string WhatsAppFormatado
+    {
+        get => Editando?.WhatsApp ?? string.Empty;
+        set { if (Editando is not null) Editando.WhatsApp = FormatacaoCadastro.FormatarTelefone(value); }
+    }
+    private void AtualizarTelefone(ChangeEventArgs evento) => TelefoneFormatado = evento.Value?.ToString() ?? string.Empty;
+    private void AtualizarWhatsApp(ChangeEventArgs evento) => WhatsAppFormatado = evento.Value?.ToString() ?? string.Empty;
+    private IEnumerable<Cliente> Filtrados => ListaClientes.Where(cliente => string.IsNullOrWhiteSpace(Busca) || cliente.Nome.Contains(Busca, StringComparison.OrdinalIgnoreCase) || cliente.Telefone.Contains(Busca, StringComparison.OrdinalIgnoreCase) || cliente.WhatsApp.Contains(Busca, StringComparison.OrdinalIgnoreCase)).OrderBy(cliente => cliente.Nome);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var estado = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        UsuarioAtualId = Guid.TryParse(estado.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, out var usuarioId) ? usuarioId : null;
+        UsuarioAtualNome = estado.User.FindFirst(System.Security.Claims.ClaimTypes.GivenName)?.Value ?? estado.User.Identity?.Name ?? string.Empty;
+        Carregar();
+    }
+    private void Carregar() => ListaClientes = Data.LoadClientes();
+    private void NovoCliente() { Feedback = null; Editando = new Cliente(); }
+    private void Editar(Cliente cliente) { Feedback = null; Editando = Copiar(cliente); }
+    private void FecharEditor() => Editando = null;
+    private void Salvar()
+    {
+        if (Editando is null) return;
+        var resultado = Management.SaveCliente(Editando, UsuarioAtualId, UsuarioAtualNome);
+        Feedback = resultado.Message; FeedbackIsError = !resultado.Success;
+        if (resultado.Success) { Carregar(); Editando = null; }
+    }
+    private void PedirExclusao(Cliente cliente) => Excluir = cliente;
+    private void ConfirmarExclusao()
+    {
+        if (Excluir is null) return;
+        var resultado = Management.DeleteCliente(Excluir.Id);
+        Feedback = resultado.Message; FeedbackIsError = !resultado.Success;
+        if (resultado.Success) { Carregar(); Excluir = null; }
+    }
+    private static string NomeCriador(string? nome) => string.IsNullOrWhiteSpace(nome) ? "Não informado" : nome;
+    private static Cliente Copiar(Cliente cliente) => new() { Id = cliente.Id, Nome = cliente.Nome, Telefone = cliente.Telefone, WhatsApp = cliente.WhatsApp, Endereco = cliente.Endereco, Numero = cliente.Numero, Complemento = cliente.Complemento, Bairro = cliente.Bairro, Cidade = cliente.Cidade, Observacoes = cliente.Observacoes, DataCadastro = cliente.DataCadastro, CriadoPorUsuarioId = cliente.CriadoPorUsuarioId, CriadoPorNome = cliente.CriadoPorNome };
+}

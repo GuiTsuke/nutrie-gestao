@@ -1,0 +1,17 @@
+@inject NavigationManager Navigation
+
+<div class="auth-redirect" aria-live="polite">
+    <strong>Autenticação necessária</strong>
+    <span>Redirecionando para o acesso seguro…</span>
+</div>
+
+@code {
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (!firstRender) return;
+
+        var relativeUrl = Navigation.ToBaseRelativePath(Navigation.Uri);
+        var returnUrl = "/" + relativeUrl;
+        Navigation.NavigateTo($"/entrar?retorno={Uri.EscapeDataString(returnUrl)}", forceLoad: true);
+    }
+}

@@ -1,0 +1,19 @@
+<article class="stat-card">
+    <div class="stat-icon @Tone" aria-hidden="true">@Icon</div>
+    <div>
+        <p>@Title</p>
+        <strong>@Value</strong>
+        @if (!string.IsNullOrWhiteSpace(Description))
+        {
+            <small>@Description</small>
+        }
+    </div>
+</article>
+
+@code {
+    [Parameter, EditorRequired] public string Title { get; set; } = string.Empty;
+    [Parameter, EditorRequired] public string Value { get; set; } = string.Empty;
+    [Parameter] public string Description { get; set; } = string.Empty;
+    [Parameter] public string Icon { get; set; } = "•";
+    [Parameter] public string Tone { get; set; } = "green";
+}

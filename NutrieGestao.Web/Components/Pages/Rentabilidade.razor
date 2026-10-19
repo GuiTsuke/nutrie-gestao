@@ -1,0 +1,43 @@
+@page "/rentabilidade"
+@attribute [Authorize]
+@inject DataService Data
+
+<PageTitle>Rentabilidade · Nutriê Gestão</PageTitle>
+
+<section class="page-heading">
+    <div><p class="eyebrow">RESULTADOS</p><h1>Rentabilidade por marmita</h1><p>Compare o valor efetivamente recebido com o custo das porções usadas.</p></div>
+</section>
+
+<section class="stats-grid profitability-stats">
+    <StatCard Title="Valor arrecadado" Value="@TotalArrecadado.ToString("C", Cultura)" Description="Pedidos não cancelados" Icon="R$" Tone="green" />
+    <StatCard Title="Valor gasto" Value="@TotalGasto.ToString("C", Cultura)" Description="Custo das receitas vendidas" Icon="−" Tone="amber" />
+    <StatCard Title="Resultado" Value="@ResultadoTotal.ToString("C", Cultura)" Description="Arrecadado menos custo" Icon="+" Tone="sage" />
+    <StatCard Title="Marmitas vendidas" Value="@QuantidadeVendida.ToString()" Description="Itens dos pedidos válidos" Icon="◫" Tone="peach" />
+</section>
+
+<section class="panel">
+    <div class="panel-heading"><div><p class="eyebrow">DETALHAMENTO</p><h2>Valor por produto</h2></div><span class="muted">Pedidos cancelados não entram no cálculo</span></div>
+    @if (!Resultados.Any())
+    {
+        <div class="empty-state"><strong>Ainda não há pedidos para calcular.</strong><span>Cadastre pedidos e informe os custos das porções na receita da marmita.</span></div>
+    }
+    else
+    {
+        <div class="table-wrap"><table class="profitability-table"><thead><tr><th>Marmita</th><th>Quantidade</th><th>Arrecadado</th><th>Gasto</th><th>Resultado</th></tr></thead><tbody>@foreach (var item in Resultados) { <tr><td><strong>@item.NomeMarmita</strong></td><td>@item.QuantidadeVendida</td><td>@item.ValorArrecadado.ToString("C", Cultura)</td><td>@item.ValorGasto.ToString("C", Cultura)</td><td class="@(item.Resultado >= 0 ? "value-positive" : "value-negative")"><strong>@item.Resultado.ToString("C", Cultura)</strong></td></tr> }</tbody></table></div>
+    }
+    <p class="calculation-note">O valor arrecadado é distribuído proporcionalmente entre os itens quando o pedido possui pagamento parcial.</p>
+</section>
+
+@code {
+    private static readonly CultureInfo Cultura = new("pt-BR");
+    private IReadOnlyList<RentabilidadeMarmita> Resultados { get; set; } = [];
+    private decimal TotalArrecadado => Resultados.Sum(item => item.ValorArrecadado);
+    private decimal TotalGasto => Resultados.Sum(item => item.ValorGasto);
+    private decimal ResultadoTotal => Resultados.Sum(item => item.Resultado);
+    private int QuantidadeVendida => Resultados.Sum(item => item.QuantidadeVendida);
+
+    protected override void OnInitialized()
+    {
+        Resultados = PedidoAnalysisCalculator.CalcularRentabilidade(Data.LoadPedidos(), Data.LoadMarmitas());
+    }
+}

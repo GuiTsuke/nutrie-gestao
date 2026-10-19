@@ -1,0 +1,18 @@
+<span class="status-badge @CssClass">@Text</span>
+
+@code {
+    [Parameter, EditorRequired] public StatusPedido Status { get; set; }
+    private string Text => Status switch
+    {
+        StatusPedido.EmPreparacao => "Em preparação",
+        _ => Status.ToString()
+    };
+    private string CssClass => Status switch
+    {
+        StatusPedido.Novo => "status-new",
+        StatusPedido.EmPreparacao => "status-preparing",
+        StatusPedido.Pronto => "status-ready",
+        StatusPedido.Entregue => "status-delivered",
+        _ => "status-cancelled"
+    };
+}

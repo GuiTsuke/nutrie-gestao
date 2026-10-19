@@ -1,0 +1,90 @@
+@page "/entrar"
+@attribute [AllowAnonymous]
+@attribute [ExcludeFromInteractiveRouting]
+@layout AuthLayout
+@inject AuthenticationService Authentication
+
+<PageTitle>Entrar · Nutriê Gestão</PageTitle>
+
+<div class="auth-brand" aria-label="Nutriê Gestão">
+    <span class="brand-mark" aria-hidden="true">N</span>
+    <span><strong>Nutriê</strong><small>GESTÃO</small></span>
+</div>
+
+<div class="auth-heading">
+    <p class="eyebrow">ACESSO SEGURO</p>
+    <h1>Entrar na gestão</h1>
+    <p>Use seu usuário e senha para continuar.</p>
+</div>
+
+@if (Mensagem is not null)
+{
+    <div class="auth-feedback" role="alert">@Mensagem</div>
+}
+
+<form method="post" action="/auth/login" class="auth-form" data-enhance="false">
+    <AntiforgeryToken />
+    <input type="hidden" name="retorno" value="@ReturnUrl" />
+
+    <label>
+        Usuário
+        <input name="usuario" type="text" autocomplete="username" minlength="3" maxlength="180" required autofocus />
+        <small>Contas criadas antes desta atualização podem usar o e-mail somente neste primeiro acesso.</small>
+    </label>
+    <label>
+        Senha
+        <input name="senha" type="password" autocomplete="current-password" maxlength="128" required />
+    </label>
+    <button class="button button-primary auth-submit" type="submit">Entrar</button>
+</form>
+
+@if (Authentication.ConfiguracaoInicialDisponivel())
+{
+    <div class="auth-help">
+        @if (Authentication.TemCodigoDeAtivacao())
+        {
+            <span>Primeiro acesso?</span>
+            <a href="/primeiro-acesso" data-enhance-nav="false">Criar conta administradora</a>
+        }
+        else
+        {
+            <span>O primeiro acesso ainda não foi habilitado neste servidor.</span>
+        }
+    </div>
+}
+
+@code {
+    [SupplyParameterFromQuery(Name = "retorno")]
+    private string? Retorno { get; set; }
+
+    [SupplyParameterFromQuery(Name = "ReturnUrl")]
+    private string? ReturnUrlQuery { get; set; }
+
+    [SupplyParameterFromQuery(Name = "erro")]
+    private string? Erro { get; set; }
+
+    [SupplyParameterFromQuery(Name = "mensagem")]
+    private string? CodigoMensagem { get; set; }
+
+    private string ReturnUrl => GetLocalReturnUrl(string.IsNullOrWhiteSpace(Retorno) ? ReturnUrlQuery : Retorno);
+
+    private string? Mensagem => Erro switch
+    {
+        "credenciais" => "Usuário ou senha inválidos.",
+        "solicitacao" => "Não foi possível validar a solicitação. Atualize a página e tente novamente.",
+        "limite" => "Muitas tentativas. Aguarde alguns minutos antes de tentar novamente.",
+        _ => CodigoMensagem switch
+        {
+            "saiu" => "Sessão encerrada com segurança.",
+            "senha-alterada" => "Senha alterada. Entre novamente para continuar.",
+            _ => null
+        }
+    };
+
+    private static string GetLocalReturnUrl(string? returnUrl)
+    {
+        return !string.IsNullOrWhiteSpace(returnUrl) && returnUrl.StartsWith('/') && !returnUrl.StartsWith("//")
+            ? returnUrl
+            : "/";
+    }
+}

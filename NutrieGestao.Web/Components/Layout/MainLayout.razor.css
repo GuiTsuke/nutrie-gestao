@@ -1,0 +1,13 @@
+.app-shell { min-height: 100vh; display: grid; grid-template-columns: 248px minmax(0, 1fr); }
+.sidebar { position: sticky; top: 0; height: 100vh; padding: 1.4rem .85rem 1rem; display: flex; flex-direction: column; background: #294d3a; color: #eaf3eb; }
+.brand { display: inline-flex; align-items: center; gap: .72rem; width: 100%; padding: .35rem .6rem; margin-bottom: 1.65rem; }
+.brand-mark { display: grid; width: 2.25rem; height: 2.25rem; place-items: center; color: #294d3a; background: #d8e8d9; border-radius: 10px; font-size: .9rem; font-weight: 850; }
+.brand strong { display: block; font-size: 1.2rem; letter-spacing: -.04em; color: white; }
+.brand small { display: block; color: #afc9b3; font-size: .58rem; font-weight: 800; letter-spacing: .17em; }
+.navigation { display: grid; gap: .35rem; }
+.sidebar-footer { margin-top: auto; display: flex; align-items: center; gap: .65rem; padding: .85rem .8rem .35rem; border-top: 1px solid rgb(255 255 255 / 12%); }
+.company-avatar { display: grid; place-items: center; width: 2rem; height: 2rem; border-radius: 50%; background: #a9c7ad; color: #294d3a; font-size: .75rem; font-weight: 800; }
+.sidebar-footer strong, .sidebar-footer small { display: block; max-width: 145px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.sidebar-footer strong { color: white; font-size: .78rem; }.sidebar-footer small { color: #afc9b3; font-size: .65rem; }
+.main-content { min-width: 0; padding: 2.5rem clamp(1.25rem, 4vw, 4rem); max-width: 1680px; width: 100%; margin: 0 auto; }.mobile-header { display: none; }
+@media (max-width: 760px) { .app-shell { display: block; }.sidebar { display: none; }.main-content { padding: 0 1rem 2rem; }.mobile-header { position: sticky; top: 0; z-index: 5; display: flex; justify-content: space-between; align-items: center; padding: .75rem 0; margin-bottom: 1.4rem; border-bottom: 1px solid var(--color-border); background: var(--color-background); }.mobile-header .brand { width: auto; margin: 0; padding: 0; }.mobile-header .brand strong { color: var(--color-primary); }.mobile-header-actions { display: flex; align-items: center; gap: .7rem; }.mobile-label { color: var(--color-muted); font-size: .78rem; } }

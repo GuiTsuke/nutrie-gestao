@@ -1,0 +1,73 @@
+@page "/"
+@attribute [Authorize]
+@inject DataService Data
+
+<PageTitle>Dashboard · Nutriê Gestão</PageTitle>
+
+@if (Resumo is null)
+{
+    <section class="loading-state" aria-live="polite">Carregando informações do negócio…</section>
+}
+else
+{
+    <section class="page-heading">
+        <div>
+            <p class="eyebrow">VISÃO GERAL</p>
+            <h1>Olá, @Responsavel</h1>
+            <p>Veja como está o seu negócio hoje.</p>
+        </div>
+        <div class="today"><span>Hoje</span><strong>@DateTime.Today.ToString("dd 'de' MMMM", Cultura)</strong></div>
+    </section>
+
+    <section class="stats-grid" aria-label="Indicadores principais">
+        <StatCard Title="Faturamento recebido" Value="@Resumo.FaturamentoRecebido.ToString("C", Cultura)" Description="Valores já recebidos" Icon="R$" Tone="green" />
+        <StatCard Title="Pedidos em andamento" Value="@Resumo.PedidosEmAndamento.ToString()" Description="Aguardando conclusão" Icon="↗" Tone="amber" />
+        <StatCard Title="Pedidos concluídos" Value="@Resumo.PedidosConcluidos.ToString()" Description="Entregues aos clientes" Icon="✓" Tone="sage" />
+        <StatCard Title="Marmitas vendidas" Value="@Resumo.QuantidadeMarmitasVendidas.ToString()" Description="Pedidos não cancelados" Icon="◫" Tone="peach" />
+        <StatCard Title="Clientes cadastrados" Value="@Resumo.TotalClientes.ToString()" Description="Base de clientes" Icon="○" Tone="peach" />
+    </section>
+
+    <section class="dashboard-grid">
+        <article class="panel recent-orders">
+            <div class="panel-heading"><div><p class="eyebrow">ACOMPANHAMENTO</p><h2>Pedidos recentes</h2></div><span class="muted">Últimos 5 pedidos</span></div>
+            @if (Resumo.PedidosRecentes.Count == 0)
+            {
+                <div class="empty-state"><strong>Seu negócio está começando.</strong><span>Cadastre clientes e pedidos no Desktop para vê-los aqui.</span></div>
+            }
+            else
+            {
+                <div class="table-wrap"><table class="recent-orders-table"><thead><tr><th>Pedido</th><th>Cliente</th><th>Entrega</th><th>Quantidade</th><th>Valor</th><th>Status</th><th>Forma de pagamento</th></tr></thead><tbody>
+                    @foreach (var pedido in Resumo.PedidosRecentes)
+                    {
+                        <tr><td><strong>#@pedido.Numero</strong></td><td>@pedido.NomeCliente</td><td>@pedido.DataEntrega.ToString("dd/MM/yyyy")</td><td>@pedido.Itens.Sum(item => item.Quantidade)</td><td>@pedido.ValorTotal.ToString("C", Cultura)</td><td><StatusBadge Status="pedido.Status" /></td><td>@TextoPagamento(pedido.FormaPagamento)</td></tr>
+                    }
+                </tbody></table></div>
+            }
+        </article>
+
+        <aside class="side-panels">
+            <article class="panel revenue-panel"><p class="eyebrow">ESTE MÊS</p><h2>Faturamento mensal</h2><strong>@Resumo.FaturamentoDoMes.ToString("C", Cultura)</strong><p>Considera apenas os valores recebidos.</p></article>
+            <article class="panel status-panel"><p class="eyebrow">VISÃO RÁPIDA</p><h2>Resumo dos pedidos</h2><div class="status-list">
+                @foreach (var status in Enum.GetValues<StatusPedido>())
+                {
+                    <div><StatusBadge Status="status" /><strong>@Resumo.PedidosPorStatus[status]</strong></div>
+                }
+            </div></article>
+        </aside>
+    </section>
+}
+
+@code {
+    private static readonly CultureInfo Cultura = new("pt-BR");
+    private DashboardSummary? Resumo { get; set; }
+    private string Responsavel { get; set; } = "seja bem-vinda";
+
+    protected override void OnInitialized()
+    {
+        var empresa = Data.LoadEmpresa();
+        Responsavel = empresa?.Responsavel ?? Responsavel;
+        Resumo = DashboardCalculator.Calcular(Data.LoadPedidos(), Data.LoadClientes());
+    }
+
+    private static string TextoPagamento(FormaPagamento forma) => forma switch { FormaPagamento.Cartao => "Cartão", _ => forma.ToString() };
+}

@@ -1,0 +1,20 @@
+@page "/configuracoes"
+@attribute [Authorize]
+@inject DataService Data
+@inject ManagementService Management
+
+<PageTitle>Configurações · Nutriê Gestão</PageTitle>
+
+<section class="page-heading"><div><p class="eyebrow">SISTEMA</p><h1>Configurações</h1><p>Mantenha atualizados os dados da sua empresa.</p></div></section>
+@if (!string.IsNullOrWhiteSpace(Feedback)) { <div class="feedback @(FeedbackIsError ? "feedback-error" : "feedback-success")" role="status">@Feedback</div> }
+<section class="content-grid"><article class="panel settings-card"><p class="eyebrow">DADOS DA EMPRESA</p><h2>Informações principais</h2><EditForm Model="Empresa" OnValidSubmit="Salvar"><div class="form-grid"><label>Nome da empresa *<InputText @bind-Value="Empresa.Nome" maxlength="120" /></label><label>Responsável *<InputText @bind-Value="Empresa.Responsavel" maxlength="120" /></label><label>Telefone<input value="@TelefoneFormatado" @oninput="AtualizarTelefone" type="tel" inputmode="tel" maxlength="15" data-phone-mask placeholder="(00) 00000-0000" /></label><label>WhatsApp<input value="@WhatsAppFormatado" @oninput="AtualizarWhatsApp" type="tel" inputmode="tel" maxlength="15" data-phone-mask placeholder="(00) 00000-0000" /></label><label class="full">Instagram<InputText @bind-Value="Empresa.Instagram" maxlength="100" /></label><label class="full">Endereço<InputText @bind-Value="Empresa.Endereco" maxlength="180" /></label><label>Cidade<InputText @bind-Value="Empresa.Cidade" maxlength="100" /></label><label>Estado<InputText @bind-Value="Empresa.Estado" maxlength="30" /></label></div><div class="editor-actions"><button type="submit" class="button button-primary">Salvar alterações</button></div></EditForm></article></section>
+
+@code {
+    private Empresa Empresa { get; set; } = new(); private string? Feedback { get; set; } private bool FeedbackIsError { get; set; }
+    private string TelefoneFormatado { get => Empresa.Telefone; set => Empresa.Telefone = FormatacaoCadastro.FormatarTelefone(value); }
+    private string WhatsAppFormatado { get => Empresa.WhatsApp; set => Empresa.WhatsApp = FormatacaoCadastro.FormatarTelefone(value); }
+    private void AtualizarTelefone(ChangeEventArgs evento) => TelefoneFormatado = evento.Value?.ToString() ?? string.Empty;
+    private void AtualizarWhatsApp(ChangeEventArgs evento) => WhatsAppFormatado = evento.Value?.ToString() ?? string.Empty;
+    protected override void OnInitialized() => Empresa = Data.LoadEmpresa() ?? new Empresa();
+    private void Salvar() { var resultado = Management.SaveEmpresa(Empresa); Feedback = resultado.Message; FeedbackIsError = !resultado.Success; }
+}

@@ -1,0 +1,381 @@
+@page "/pedidos"
+@attribute [Authorize]
+@inject DataService Data
+@inject ManagementService Management
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Pedidos · Nutriê Gestão</PageTitle>
+
+<section class="page-heading">
+    <div><p class="eyebrow">VENDAS</p><h1>Pedidos</h1><p>Acompanhe as encomendas e organize as próximas entregas.</p></div>
+    <button class="button button-primary" @onclick="NovoPedido">+ Novo pedido</button>
+</section>
+
+@if (!string.IsNullOrWhiteSpace(Feedback))
+{
+    <div class="feedback @(FeedbackIsError ? "feedback-error" : "feedback-success")" role="status">@Feedback</div>
+}
+
+<section class="orders-layout @(Editando is not null ? "editing-order" : string.Empty)">
+    <article class="panel">
+        <div class="orders-toolbar">
+            <div class="filter-list">
+                <button class="filter-button @(FiltroStatus is null ? "selected" : string.Empty)" @onclick="() => FiltroStatus = null">Todos</button>
+                @foreach (var status in Enum.GetValues<StatusPedido>())
+                {
+                    <button class="filter-button @(FiltroStatus == status ? "selected" : string.Empty)" @onclick="() => FiltroStatus = status">@TextoStatus(status)</button>
+                }
+            </div>
+            <div class="search-field"><span>⌕</span><input @bind="Busca" @bind:event="oninput" placeholder="Pedido ou cliente" aria-label="Buscar pedido" /></div>
+        </div>
+
+        @if (!Filtrados.Any())
+        {
+            <div class="empty-state"><strong>Nenhum pedido encontrado.</strong><span>Crie um novo pedido para começar.</span></div>
+        }
+        else
+        {
+            <div class="table-wrap">
+                <table class="orders-table">
+                    <thead><tr><th>Pedido</th><th>Cliente</th><th>Entrega</th><th>Valor</th><th>Pago</th><th>Pagamento</th><th>Status</th><th></th></tr></thead>
+                    <tbody>
+                        @foreach (var pedido in Filtrados)
+                        {
+                            <tr class="order-row" @onclick="() => AbrirDetalhes(pedido)">
+                                <td><strong>#@pedido.Numero</strong></td>
+                                <td>@pedido.NomeCliente</td>
+                                <td>@pedido.DataEntrega.ToString("dd/MM")</td>
+                                <td>@pedido.ValorTotal.ToString("C", Cultura)</td>
+                                <td>@pedido.ValorPago.ToString("C", Cultura)</td>
+                                <td>@TextoPagamento(pedido.FormaPagamento)</td>
+                                <td><StatusBadge Status="pedido.Status" /></td>
+                                <td class="actions"><button class="text-button" @onclick="() => AbrirDetalhes(pedido)" @onclick:stopPropagation="true">Detalhes</button><button class="text-button" @onclick="() => Editar(pedido)" @onclick:stopPropagation="true">Editar</button><button class="text-button danger" @onclick="() => PedirExclusao(pedido)" @onclick:stopPropagation="true">Excluir</button></td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+    </article>
+
+    @if (Editando is not null)
+    {
+        <aside class="panel order-editor">
+            <div class="editor-heading"><div><p class="eyebrow">@(Criando ? "NOVO PEDIDO" : $"PEDIDO #{Editando.Numero}")</p><h2>@(Criando ? "Montar pedido" : "Editar pedido")</h2></div><button type="button" class="icon-button" @onclick="FecharEditor" aria-label="Fechar">×</button></div>
+
+            <div class="form-grid">
+                <label class="full">Cliente *<select @bind="ClienteIdSelecionado"><option value="@Guid.Empty">Selecione um cliente</option>@foreach (var cliente in Clientes.OrderBy(cliente => cliente.Nome)) { <option value="@cliente.Id">@cliente.Nome</option> }</select></label>
+                <label>Entrega *<InputDate @bind-Value="Editando.DataEntrega" /></label>
+                <label>Status<InputSelect @bind-Value="Editando.Status">@foreach (var status in Enum.GetValues<StatusPedido>()) { <option value="@status">@TextoStatus(status)</option> }</InputSelect></label>
+            </div>
+
+            <div class="order-products">
+                <div class="section-label"><h2>Adicionar marmitas</h2><span>Busque e adicione ao pedido</span></div>
+                <div class="search-field"><span>⌕</span><input @bind="BuscaProduto" @bind:event="oninput" placeholder="Buscar marmita..." aria-label="Buscar marmita para o pedido" /></div>
+                <div class="mini-products">
+                    @foreach (var marmita in ProdutosVisiveis)
+                    {
+                        <div><div><strong>@marmita.Nome</strong><span>@marmita.Tamanho · @marmita.Preco.ToString("C", Cultura)</span></div><button class="text-button" @onclick="() => AdicionarItem(marmita)">Adicionar</button></div>
+                    }
+                </div>
+            </div>
+
+            <div class="order-items">
+                <div class="section-label"><h2>Itens do pedido</h2><span>@Itens.Count item(ns)</span></div>
+                @if (!Itens.Any())
+                {
+                    <div class="empty-state compact"><span>Adicione as marmitas deste pedido.</span></div>
+                }
+                else
+                {
+                    @foreach (var item in Itens)
+                    {
+                        <div class="order-item"><div><strong>@item.Nome</strong><span>@item.ValorUnitario.ToString("C", Cultura) cada</span></div><div class="quantity"><button class="quantity-button" @onclick="() => AlterarQuantidade(item, -1)" aria-label="Diminuir quantidade">−</button><strong>@item.Quantidade</strong><button class="quantity-button" @onclick="() => AlterarQuantidade(item, 1)" aria-label="Aumentar quantidade">+</button></div><strong>@item.Subtotal.ToString("C", Cultura)</strong><button class="icon-button danger-icon" @onclick="() => RemoverItem(item)" aria-label="Remover item">×</button></div>
+                    }
+                }
+            </div>
+
+            <div class="form-grid payment-grid">
+                <label>Forma de pagamento<InputSelect @bind-Value="Editando.FormaPagamento">@foreach (var forma in Enum.GetValues<FormaPagamento>()) { <option value="@forma">@TextoPagamento(forma)</option> }</InputSelect></label>
+                <label>Desconto em<InputSelect @bind-Value="Editando.TipoDesconto" @bind-Value:after="AtualizarLimiteDesconto"><option value="@TipoDescontoPedido.Valor">Valor (R$)</option><option value="@TipoDescontoPedido.Percentual">Porcentagem (%)</option></InputSelect></label>
+                <label>@(Editando.TipoDesconto == TipoDescontoPedido.Percentual ? "Desconto (%)" : "Desconto (R$)")<input value="@DescontoTexto" @oninput="AtualizarDesconto" type="number" min="0" max="@LimiteDesconto" step="0.01" inputmode="decimal" data-percent-limit="@(Editando.TipoDesconto == TipoDescontoPedido.Percentual ? "true" : null)" /><small>@(Editando.TipoDesconto == TipoDescontoPedido.Percentual ? "Informe de 0 a 100%." : "Informe o valor a descontar.")</small></label>
+                <label class="full">Observações<InputTextArea @bind-Value="Editando.Observacoes" maxlength="1000" /></label>
+            </div>
+            <div class="order-summary"><div><span>Marmitas</span><strong>@ValorBruto.ToString("C", Cultura)</strong></div><div><span>Desconto</span><strong>- @ValorDesconto.ToString("C", Cultura)</strong></div><div class="pending"><span>Total</span><strong>@Total.ToString("C", Cultura)</strong></div></div>
+            <div class="editor-actions"><button type="button" class="button button-quiet" @onclick="FecharEditor">Cancelar</button><button type="button" class="button button-primary" @onclick="Salvar">Salvar pedido</button></div>
+        </aside>
+    }
+</section>
+
+@if (Detalhes is not null)
+{
+    <div class="modal-backdrop">
+        <section class="confirm-dialog order-details-dialog" role="dialog" aria-modal="true" aria-labelledby="order-details-title">
+            <div class="editor-heading"><div><p class="eyebrow">PEDIDO #@Detalhes.Numero</p><h2 id="order-details-title">Detalhamento do pedido</h2></div><button type="button" class="icon-button" @onclick="() => Detalhes = null" aria-label="Fechar">×</button></div>
+            <div class="detail-grid"><div><span>Cliente</span><strong>@Detalhes.NomeCliente</strong></div><div><span>Entrega</span><strong>@Detalhes.DataEntrega.ToString("dd/MM/yyyy")</strong></div><div><span>Pagamento</span><strong>@TextoPagamento(Detalhes.FormaPagamento)</strong></div><div><span>Status</span><StatusBadge Status="Detalhes.Status" /></div></div>
+            <div class="order-summary detail-summary"><div><span>Marmitas</span><strong>@QuantidadeMarmitasDetalhes</strong></div><div><span>Desconto</span><strong>- @Detalhes.ValorDesconto.ToString("C", Cultura)</strong></div><div class="pending"><span>Total</span><strong>@Detalhes.ValorTotal.ToString("C", Cultura)</strong></div></div>
+            <div class="detail-section"><div class="section-label"><h2>Itens</h2><span>@Detalhes.Itens.Count produto(s)</span></div><div class="detail-list">@foreach (var item in Detalhes.Itens) { <div><span>@item.Quantidade × @item.NomeMarmita</span><strong>@item.Subtotal.ToString("C", Cultura)</strong></div> }</div></div>
+            <div class="detail-section"><div class="section-label"><h2>Ingredientes necessários</h2><span>Planejamento deste pedido</span></div>@if (!IngredientesDetalhes.Any()) { <div class="empty-state compact"><span>Esta receita ainda não possui ingredientes cadastrados.</span></div> } else { <div class="detail-list">@foreach (var ingrediente in IngredientesDetalhes) { <div><span>@ingrediente.Nome</span><strong>@FormatarQuantidade(ingrediente)</strong></div> }</div> }</div>
+            @if (!string.IsNullOrWhiteSpace(Detalhes.Observacoes)) { <div class="detail-section"><p class="eyebrow">OBSERVAÇÕES</p><p class="detail-note">@Detalhes.Observacoes</p></div> }
+            <div class="editor-actions"><button class="button button-primary" @onclick="() => Detalhes = null">Fechar</button></div>
+        </section>
+    </div>
+}
+
+@if (Excluir is not null)
+{
+    <div class="modal-backdrop"><section class="confirm-dialog" role="alertdialog" aria-modal="true"><p class="eyebrow">CONFIRMAR EXCLUSÃO</p><h2>Excluir pedido #@Excluir.Numero?</h2><p>Esta ação não pode ser desfeita.</p><div><button class="button button-quiet" @onclick="() => Excluir = null">Cancelar</button><button class="button button-danger" @onclick="ConfirmarExclusao">Excluir pedido</button></div></section></div>
+}
+
+@code {
+    private sealed class ItemEditor
+    {
+        public Guid MarmitaId { get; init; }
+        public string Nome { get; init; } = string.Empty;
+        public int Quantidade { get; set; } = 1;
+        public decimal ValorUnitario { get; init; }
+        public List<IngredienteMarmita> Ingredientes { get; init; } = [];
+        public decimal Subtotal => MultiplicarComLimite(Quantidade, ValorUnitario);
+    }
+
+    private static readonly CultureInfo Cultura = new("pt-BR");
+    private List<Pedido> ListaPedidos { get; set; } = [];
+    private List<Cliente> Clientes { get; set; } = [];
+    private List<Marmita> Marmitas { get; set; } = [];
+    private Pedido? Editando { get; set; }
+    private Pedido? Detalhes { get; set; }
+    private Pedido? Excluir { get; set; }
+    private List<ItemEditor> Itens { get; } = [];
+    private Guid _clienteIdSelecionado;
+    private bool Criando { get; set; }
+    private string Busca { get; set; } = string.Empty;
+    private string BuscaProduto { get; set; } = string.Empty;
+    private StatusPedido? FiltroStatus { get; set; }
+    private string? Feedback { get; set; }
+    private bool FeedbackIsError { get; set; }
+    private Guid? UsuarioAtualId { get; set; }
+    private string UsuarioAtualNome { get; set; } = string.Empty;
+
+    private Guid ClienteIdSelecionado
+    {
+        get => _clienteIdSelecionado;
+        set
+        {
+            _clienteIdSelecionado = value;
+            if (Editando is null) return;
+            var cliente = Clientes.FirstOrDefault(item => item.Id == value);
+            Editando.ClienteId = cliente?.Id ?? Guid.Empty;
+            Editando.NomeCliente = cliente?.Nome ?? string.Empty;
+        }
+    }
+
+    private IEnumerable<Pedido> Filtrados => ListaPedidos
+        .Where(pedido => (FiltroStatus is null || pedido.Status == FiltroStatus) &&
+                          (string.IsNullOrWhiteSpace(Busca) || pedido.Numero.Contains(Busca, StringComparison.OrdinalIgnoreCase) || pedido.NomeCliente.Contains(Busca, StringComparison.OrdinalIgnoreCase)))
+        .OrderByDescending(pedido => pedido.DataPedido);
+
+    private IEnumerable<Marmita> ProdutosVisiveis => Marmitas
+        .Where(marmita => marmita.Ativo && (string.IsNullOrWhiteSpace(BuscaProduto) || marmita.Nome.Contains(BuscaProduto, StringComparison.OrdinalIgnoreCase)))
+        .OrderBy(marmita => marmita.Nome)
+        .Take(5);
+
+    private decimal ValorBruto => Itens.Aggregate(0m, (total, item) => SomarComLimite(total, item.Subtotal));
+    private decimal ValorDesconto => CalcularValorDesconto(ValorBruto, Editando?.TipoDesconto ?? TipoDescontoPedido.Valor, Editando?.Desconto ?? 0);
+    private decimal Total => ValorBruto - ValorDesconto;
+    private decimal Pendente => Math.Max(0, Total - (Editando?.ValorPago ?? 0));
+    private decimal LimiteDesconto => Editando?.TipoDesconto == TipoDescontoPedido.Percentual ? 100 : Math.Min(ValorBruto, ValidacaoCadastro.ValorMonetarioMaximo);
+    private string DescontoTexto => (Editando?.Desconto ?? 0).ToString(CultureInfo.InvariantCulture);
+    private int QuantidadeMarmitasDetalhes => Detalhes?.Itens.Sum(item => item.Quantidade) ?? 0;
+    private IReadOnlyList<IngredienteTotal> IngredientesDetalhes => Detalhes is null ? [] : PedidoAnalysisCalculator.CalcularIngredientes(Detalhes, Marmitas);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var estado = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        UsuarioAtualId = Guid.TryParse(estado.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, out var usuarioId) ? usuarioId : null;
+        UsuarioAtualNome = estado.User.FindFirst(System.Security.Claims.ClaimTypes.GivenName)?.Value ?? estado.User.Identity?.Name ?? string.Empty;
+        Carregar();
+    }
+
+    private void Carregar()
+    {
+        ListaPedidos = Data.LoadPedidos();
+        Clientes = Data.LoadClientes();
+        Marmitas = Data.LoadMarmitas();
+    }
+
+    private void NovoPedido()
+    {
+        Feedback = null;
+        Criando = true;
+        Editando = new Pedido { DataEntrega = DateTime.Today.AddDays(1) };
+        Itens.Clear();
+        ClienteIdSelecionado = Guid.Empty;
+    }
+
+    private void Editar(Pedido pedido)
+    {
+        Feedback = null;
+        Criando = false;
+        Editando = CopiarPedido(pedido);
+        Itens.Clear();
+        Itens.AddRange(pedido.Itens.Select(item => new ItemEditor { MarmitaId = item.MarmitaId, Nome = item.NomeMarmita, Quantidade = item.Quantidade, ValorUnitario = item.ValorUnitario, Ingredientes = CopiarIngredientes(item.Ingredientes) }));
+        ClienteIdSelecionado = pedido.ClienteId;
+    }
+
+    private void FecharEditor()
+    {
+        Editando = null;
+        Itens.Clear();
+    }
+
+    private void AdicionarItem(Marmita marmita)
+    {
+        var existente = Itens.FirstOrDefault(item => item.MarmitaId == marmita.Id);
+        if (existente is not null)
+        {
+            if (existente.Quantidade >= ValidacaoCadastro.QuantidadeItemPedidoMaxima)
+            {
+                Feedback = $"Cada item pode ter no máximo {ValidacaoCadastro.QuantidadeItemPedidoMaxima} unidades por pedido.";
+                FeedbackIsError = true;
+                return;
+            }
+            existente.Quantidade++;
+        }
+        else Itens.Add(new ItemEditor { MarmitaId = marmita.Id, Nome = marmita.Nome, ValorUnitario = marmita.Preco, Ingredientes = CopiarIngredientes(marmita.Ingredientes) });
+        AtualizarValorPagoAutomatico();
+    }
+
+    private void AlterarQuantidade(ItemEditor item, int ajuste)
+    {
+        if (ajuste > 0 && item.Quantidade >= ValidacaoCadastro.QuantidadeItemPedidoMaxima)
+        {
+            Feedback = $"Cada item pode ter no máximo {ValidacaoCadastro.QuantidadeItemPedidoMaxima} unidades por pedido.";
+            FeedbackIsError = true;
+            return;
+        }
+        item.Quantidade += ajuste;
+        if (item.Quantidade < 1) Itens.Remove(item);
+        AtualizarValorPagoAutomatico();
+    }
+
+    private void RemoverItem(ItemEditor item)
+    {
+        Itens.Remove(item);
+        AtualizarValorPagoAutomatico();
+    }
+
+    private void AtualizarLimiteDesconto()
+    {
+        if (Editando is null) return;
+        Editando.Desconto = Math.Clamp(Editando.Desconto, 0, LimiteDesconto);
+        AtualizarValorPagoAutomatico();
+    }
+
+    private void AtualizarDesconto(ChangeEventArgs evento)
+    {
+        if (Editando is null) return;
+
+        var texto = evento.Value?.ToString() ?? string.Empty;
+        if (decimal.TryParse(texto, NumberStyles.Number, CultureInfo.InvariantCulture, out var desconto) ||
+            decimal.TryParse(texto, NumberStyles.Number, Cultura, out desconto))
+        {
+            Editando.Desconto = Math.Clamp(desconto, 0, LimiteDesconto);
+            AtualizarValorPagoAutomatico();
+        }
+    }
+
+    private void AtualizarValorPagoAutomatico()
+    {
+        if (Editando is null) return;
+        if (Criando) Editando.ValorPago = Total;
+        else if (Editando.ValorPago > Total) Editando.ValorPago = Total;
+    }
+
+    private void Salvar()
+    {
+        if (Editando is null) return;
+        Editando.Itens = Itens.Select(item => new ItemPedido
+        {
+            MarmitaId = item.MarmitaId,
+            NomeMarmita = item.Nome,
+            Quantidade = item.Quantidade,
+            ValorUnitario = item.ValorUnitario,
+            Ingredientes = CopiarIngredientes(item.Ingredientes)
+        }).ToList();
+
+        var resultado = Management.SavePedido(Editando, UsuarioAtualId, UsuarioAtualNome);
+        Feedback = resultado.Message;
+        FeedbackIsError = !resultado.Success;
+        if (!resultado.Success) return;
+
+        Carregar();
+        FecharEditor();
+    }
+
+    private void AbrirDetalhes(Pedido pedido) => Detalhes = pedido;
+    private void PedirExclusao(Pedido pedido) => Excluir = pedido;
+
+    private void ConfirmarExclusao()
+    {
+        if (Excluir is null) return;
+        var resultado = Management.DeletePedido(Excluir.Id);
+        Feedback = resultado.Message;
+        FeedbackIsError = !resultado.Success;
+        if (resultado.Success)
+        {
+            Carregar();
+            Excluir = null;
+        }
+    }
+
+    private static string TextoStatus(StatusPedido status) => status switch { StatusPedido.EmPreparacao => "Em preparação", _ => status.ToString() };
+    private static string TextoPagamento(FormaPagamento forma) => forma switch { FormaPagamento.Cartao => "Cartão", _ => forma.ToString() };
+    private static string FormatarQuantidade(IngredienteTotal ingrediente) => ingrediente.Unidade == UnidadeIngrediente.Gramas ? $"{ingrediente.Quantidade:N0} g" : $"{ingrediente.Quantidade:N2} un.";
+
+    private static Pedido CopiarPedido(Pedido pedido) => new()
+    {
+        Id = pedido.Id,
+        Numero = pedido.Numero,
+        ClienteId = pedido.ClienteId,
+        NomeCliente = pedido.NomeCliente,
+        DataPedido = pedido.DataPedido,
+        DataEntrega = pedido.DataEntrega,
+        Status = pedido.Status,
+        FormaPagamento = pedido.FormaPagamento,
+        Observacoes = pedido.Observacoes,
+        TipoDesconto = pedido.TipoDesconto,
+        Desconto = pedido.Desconto,
+        ValorPago = pedido.ValorPago,
+        CriadoPorUsuarioId = pedido.CriadoPorUsuarioId,
+        CriadoPorNome = pedido.CriadoPorNome
+    };
+
+    private static decimal CalcularValorDesconto(decimal valorBruto, TipoDescontoPedido tipoDesconto, decimal desconto)
+    {
+        if (desconto <= 0) return 0;
+        var valorCalculado = tipoDesconto == TipoDescontoPedido.Percentual
+            ? Math.Round(valorBruto / 100m * Math.Min(desconto, 100m), 2, MidpointRounding.AwayFromZero)
+            : desconto;
+        return Math.Min(valorBruto, valorCalculado);
+    }
+
+    private static decimal MultiplicarComLimite(int quantidade, decimal valorUnitario)
+    {
+        try { return quantidade * valorUnitario; }
+        catch (OverflowException) { return decimal.MaxValue; }
+    }
+
+    private static decimal SomarComLimite(decimal primeiroValor, decimal segundoValor)
+    {
+        try { return primeiroValor + segundoValor; }
+        catch (OverflowException) { return decimal.MaxValue; }
+    }
+
+    private static List<IngredienteMarmita> CopiarIngredientes(IEnumerable<IngredienteMarmita> ingredientes) => ingredientes.Select(ingrediente => new IngredienteMarmita
+    {
+        Nome = ingrediente.Nome,
+        QuantidadePorMarmita = ingrediente.QuantidadePorMarmita,
+        Unidade = ingrediente.Unidade,
+        CustoPorcao = ingrediente.CustoPorcao
+    }).ToList();
+}

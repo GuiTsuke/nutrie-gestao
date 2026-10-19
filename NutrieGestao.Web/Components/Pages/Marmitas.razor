@@ -1,0 +1,218 @@
+@page "/marmitas"
+@attribute [Authorize]
+@inject DataService Data
+@inject ManagementService Management
+@inject AuthenticationStateProvider AuthenticationStateProvider
+
+<PageTitle>Marmitas · Nutriê Gestão</PageTitle>
+
+<section class="page-heading">
+    <div>
+        <p class="eyebrow">CARDÁPIO</p>
+        <h1>Marmitas</h1>
+        <p>Organize os produtos e a receita usada em cada preparo.</p>
+    </div>
+    <button class="button button-primary" @onclick="NovaMarmita">+ Nova marmita</button>
+</section>
+
+@if (!string.IsNullOrWhiteSpace(Feedback))
+{
+    <div class="feedback @(FeedbackIsError ? "feedback-error" : "feedback-success")" role="status">@Feedback</div>
+}
+
+<section class="content-grid @(Editando is not null ? "has-editor" : string.Empty)">
+    <article class="panel">
+        <div class="list-toolbar">
+            <div class="search-field"><span>⌕</span><input @bind="Busca" @bind:event="oninput" placeholder="Buscar marmita" aria-label="Buscar marmita" /></div>
+            <span class="muted">@Filtradas.Count() produto(s)</span>
+        </div>
+
+        @if (!Filtradas.Any())
+        {
+            <div class="empty-state"><strong>Nenhuma marmita encontrada.</strong><span>Cadastre os produtos que você vende.</span></div>
+        }
+        else
+        {
+            <div class="product-grid">
+                @foreach (var marmita in Filtradas)
+                {
+                    <article class="product-card">
+                        <div class="product-placeholder">🍽</div>
+                        <div>
+                            <span class="product-category">@marmita.Categoria</span>
+                            <h2>@marmita.Nome</h2>
+                            <p>@marmita.Descricao</p>
+                            <div class="product-meta"><span>@marmita.Tamanho · @marmita.Ingredientes.Count ingrediente(s)</span><strong>@marmita.Preco.ToString("C", Cultura)</strong></div>
+                            <div class="product-actions">
+                                <span class="status-badge @(marmita.Ativo ? "status-ready" : "status-cancelled")">@(marmita.Ativo ? "Ativa" : "Inativa")</span>
+                                <button class="text-button" @onclick="() => Editar(marmita)">Editar</button>
+                                <button class="text-button" @onclick="() => AlternarAtivo(marmita)">@(marmita.Ativo ? "Inativar" : "Ativar")</button>
+                                <button class="text-button danger" @onclick="() => PedirExclusao(marmita)">Excluir</button>
+                            </div>
+                        </div>
+                    </article>
+                }
+            </div>
+        }
+    </article>
+
+    @if (Editando is not null)
+    {
+        <aside class="panel editor-panel recipe-panel">
+            <div class="editor-heading">
+                <div><p class="eyebrow">@(Criando ? "NOVA MARMITA" : "EDITAR MARMITA")</p><h2>@(Criando ? "Cadastrar produto" : Editando.Nome)</h2></div>
+                <button type="button" class="icon-button" @onclick="FecharEditor" aria-label="Fechar">×</button>
+            </div>
+
+            <EditForm Model="Editando" OnValidSubmit="Salvar">
+                <div class="form-grid">
+                    <label class="full">Nome *<InputText @bind-Value="Editando.Nome" maxlength="120" /></label>
+                    <label class="full">Descrição<InputTextArea @bind-Value="Editando.Descricao" maxlength="500" /></label>
+                    <label>Categoria<InputText @bind-Value="Editando.Categoria" placeholder="Ex.: Linha Equilíbrio" maxlength="100" /></label>
+                    <label>Tamanho *<InputSelect @bind-Value="Editando.Tamanho"><option value="">Selecione</option>@foreach (var tamanho in TamanhosMarmita.Valores) { <option value="@tamanho">@tamanho</option> }</InputSelect></label>
+                    <label>Preço de venda *<InputNumber @bind-Value="Editando.Preco" min="0" max="1000000" step="0.01" inputmode="decimal" /></label>
+                    <label class="check-field"><InputCheckbox @bind-Value="Editando.Ativo" /> Disponível para novos pedidos</label>
+                </div>
+
+                <section class="recipe-editor">
+                    <div class="section-label"><div><h2>Ingredientes</h2><span>Quantidade por marmita e custo da porção</span></div><button type="button" class="text-button" @onclick="AdicionarIngrediente">+ Adicionar</button></div>
+                    @if (Editando.Ingredientes.Count == 0)
+                    {
+                        <div class="empty-state compact"><span>Adicione os ingredientes para calcular consumo e custo.</span></div>
+                    }
+                    else
+                    {
+                        <div class="ingredient-editor-head"><span>Ingrediente</span><span>Quantidade</span><span>Unidade</span><span>Custo da porção</span><span></span></div>
+                        @foreach (var ingrediente in Editando.Ingredientes)
+                        {
+                            <div class="ingredient-editor-row">
+                                <InputText @bind-Value="ingrediente.Nome" placeholder="Ex.: Frango" aria-label="Nome do ingrediente" maxlength="100" />
+                                <InputNumber @bind-Value="ingrediente.QuantidadePorMarmita" min="0" max="100000" step="0.01" inputmode="decimal" aria-label="Quantidade por marmita" />
+                                <InputSelect @bind-Value="ingrediente.Unidade" aria-label="Unidade do ingrediente">@foreach (var unidade in Enum.GetValues<UnidadeIngrediente>()) { <option value="@unidade">@TextoUnidade(unidade)</option> }</InputSelect>
+                                <InputNumber @bind-Value="ingrediente.CustoPorcao" min="0" max="1000000" step="0.01" inputmode="decimal" aria-label="Custo da porção" />
+                                <button type="button" class="icon-button danger-icon" @onclick="() => RemoverIngrediente(ingrediente)" aria-label="Remover ingrediente">×</button>
+                            </div>
+                        }
+                    }
+                </section>
+
+                <div class="editor-actions"><button type="button" class="button button-quiet" @onclick="FecharEditor">Cancelar</button><button type="submit" class="button button-primary">Salvar marmita</button></div>
+            </EditForm>
+        </aside>
+    }
+</section>
+
+@if (Excluir is not null)
+{
+    <div class="modal-backdrop"><section class="confirm-dialog" role="alertdialog" aria-modal="true"><p class="eyebrow">CONFIRMAR EXCLUSÃO</p><h2>Excluir @Excluir.Nome?</h2><p>Se ela já tiver pedidos, será preciso mantê-la no histórico como inativa.</p><div><button class="button button-quiet" @onclick="() => Excluir = null">Cancelar</button><button class="button button-danger" @onclick="ConfirmarExclusao">Excluir marmita</button></div></section></div>
+}
+
+@code {
+    private static readonly CultureInfo Cultura = new("pt-BR");
+    private List<Marmita> ListaMarmitas { get; set; } = [];
+    private Marmita? Editando { get; set; }
+    private Marmita? Excluir { get; set; }
+    private bool Criando { get; set; }
+    private string Busca { get; set; } = string.Empty;
+    private string? Feedback { get; set; }
+    private bool FeedbackIsError { get; set; }
+    private Guid? UsuarioAtualId { get; set; }
+    private string UsuarioAtualNome { get; set; } = string.Empty;
+
+    private IEnumerable<Marmita> Filtradas => ListaMarmitas.Where(marmita =>
+        string.IsNullOrWhiteSpace(Busca) ||
+        marmita.Nome.Contains(Busca, StringComparison.OrdinalIgnoreCase) ||
+        marmita.Categoria.Contains(Busca, StringComparison.OrdinalIgnoreCase)).OrderBy(marmita => marmita.Nome);
+
+    protected override async Task OnInitializedAsync()
+    {
+        var estado = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+        UsuarioAtualId = Guid.TryParse(estado.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, out var usuarioId) ? usuarioId : null;
+        UsuarioAtualNome = estado.User.FindFirst(System.Security.Claims.ClaimTypes.GivenName)?.Value ?? estado.User.Identity?.Name ?? string.Empty;
+        Carregar();
+    }
+
+    private void Carregar() => ListaMarmitas = Data.LoadMarmitas();
+
+    private void NovaMarmita()
+    {
+        Feedback = null;
+        Criando = true;
+        Editando = new Marmita { Tamanho = TamanhosMarmita.Valores[0] };
+    }
+
+    private void Editar(Marmita marmita)
+    {
+        Feedback = null;
+        Criando = false;
+        Editando = Copiar(marmita);
+    }
+
+    private void FecharEditor() => Editando = null;
+
+    private void AdicionarIngrediente() => Editando?.Ingredientes.Add(new IngredienteMarmita());
+
+    private void RemoverIngrediente(IngredienteMarmita ingrediente) => Editando?.Ingredientes.Remove(ingrediente);
+
+    private void Salvar()
+    {
+        if (Editando is null) return;
+        var resultado = Management.SaveMarmita(Editando, UsuarioAtualId, UsuarioAtualNome);
+        Feedback = resultado.Message;
+        FeedbackIsError = !resultado.Success;
+        if (!resultado.Success) return;
+
+        Carregar();
+        Editando = null;
+    }
+
+    private void AlternarAtivo(Marmita marmita)
+    {
+        var copia = Copiar(marmita);
+        copia.Ativo = !copia.Ativo;
+        var resultado = Management.SaveMarmita(copia, UsuarioAtualId, UsuarioAtualNome);
+        Feedback = resultado.Message;
+        FeedbackIsError = !resultado.Success;
+        Carregar();
+    }
+
+    private void PedirExclusao(Marmita marmita) => Excluir = marmita;
+
+    private void ConfirmarExclusao()
+    {
+        if (Excluir is null) return;
+        var resultado = Management.DeleteMarmita(Excluir.Id);
+        Feedback = resultado.Message;
+        FeedbackIsError = !resultado.Success;
+        if (resultado.Success)
+        {
+            Carregar();
+            Excluir = null;
+        }
+    }
+
+    private static string TextoUnidade(UnidadeIngrediente unidade) => unidade == UnidadeIngrediente.Gramas ? "Gramas" : "Unidade";
+
+    private static Marmita Copiar(Marmita marmita) => new()
+    {
+        Id = marmita.Id,
+        Nome = marmita.Nome,
+        Descricao = marmita.Descricao,
+        Categoria = marmita.Categoria,
+        Tamanho = marmita.Tamanho,
+        Preco = marmita.Preco,
+        Ingredientes = CopiarIngredientes(marmita.Ingredientes),
+        Ativo = marmita.Ativo,
+        DataCadastro = marmita.DataCadastro,
+        CriadoPorUsuarioId = marmita.CriadoPorUsuarioId,
+        CriadoPorNome = marmita.CriadoPorNome
+    };
+
+    private static List<IngredienteMarmita> CopiarIngredientes(IEnumerable<IngredienteMarmita> ingredientes) => ingredientes.Select(ingrediente => new IngredienteMarmita
+    {
+        Nome = ingrediente.Nome,
+        QuantidadePorMarmita = ingrediente.QuantidadePorMarmita,
+        Unidade = ingrediente.Unidade,
+        CustoPorcao = ingrediente.CustoPorcao
+    }).ToList();
+}

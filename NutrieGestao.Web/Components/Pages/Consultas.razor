@@ -1,0 +1,79 @@
+@page "/consultas"
+@attribute [Authorize]
+@inject DataService Data
+
+<PageTitle>Consultas · Nutriê Gestão</PageTitle>
+
+<section class="page-heading">
+    <div><p class="eyebrow">INFORMAÇÕES</p><h1>Consultas</h1><p>Filtre vendas, clientes e ingredientes para apoiar suas decisões.</p></div>
+</section>
+
+<section class="panel consultation-filters">
+    <div class="panel-heading"><div><p class="eyebrow">FILTROS</p><h2>Período e recortes</h2></div><span class="muted">Cancelados ficam fora quando nenhum status é selecionado</span></div>
+    <div class="form-grid">
+        <label>Data inicial<InputDate @bind-Value="DataInicial" /></label>
+        <label>Data final<InputDate @bind-Value="DataFinal" /></label>
+        <label>Cliente<select @bind="ClienteSelecionado"><option value="">Todos os clientes</option>@foreach (var cliente in Clientes.OrderBy(cliente => cliente.Nome)) { <option value="@cliente.Id">@cliente.Nome</option> }</select></label>
+        <label>Status<select @bind="StatusSelecionado"><option value="">Todos os status válidos</option>@foreach (var status in Enum.GetValues<StatusPedido>()) { <option value="@status">@TextoStatus(status)</option> }</select></label>
+        <label class="full">Ingrediente<input @bind="BuscaIngrediente" @bind:event="oninput" placeholder="Ex.: frango, arroz ou feijão" /></label>
+    </div>
+</section>
+
+<section class="stats-grid consultation-stats">
+    <StatCard Title="Valor das marmitas" Value="@Resumo.ValorTotal.ToString("C", Cultura)" Description="Total de pedidos filtrados" Icon="R$" Tone="green" />
+    <StatCard Title="Valor recebido" Value="@Resumo.ValorRecebido.ToString("C", Cultura)" Description="Pagamentos registrados" Icon="↓" Tone="sage" />
+    <StatCard Title="Marmitas vendidas" Value="@Resumo.QuantidadeMarmitas.ToString()" Description="Quantidade nos pedidos" Icon="◫" Tone="amber" />
+    <StatCard Title="Pedidos encontrados" Value="@Resumo.Pedidos.Count.ToString()" Description="No período selecionado" Icon="≡" Tone="peach" />
+</section>
+
+<section class="consultation-grid">
+    <article class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">INGREDIENTES</p><h2>Consumo no período</h2></div><span class="muted">Soma das receitas dos pedidos</span></div>
+        @if (!Resumo.Ingredientes.Any())
+        {
+            <div class="empty-state"><strong>Nenhum ingrediente encontrado.</strong><span>Cadastre receitas nas marmitas ou ajuste o filtro.</span></div>
+        }
+        else
+        {
+            <div class="detail-list ingredient-totals">@foreach (var ingrediente in Resumo.Ingredientes) { <div><span>@ingrediente.Nome</span><strong>@ingrediente.QuantidadeMarmitas marmita(s) · @FormatarQuantidade(ingrediente)</strong></div> }</div>
+        }
+    </article>
+
+    <article class="panel">
+        <div class="panel-heading"><div><p class="eyebrow">PEDIDOS</p><h2>Detalhamento encontrado</h2></div><span class="muted">@Resumo.Pedidos.Count pedido(s)</span></div>
+        @if (!Resumo.Pedidos.Any())
+        {
+            <div class="empty-state"><strong>Nenhum pedido no recorte selecionado.</strong><span>Altere os filtros para ampliar a busca.</span></div>
+        }
+        else
+        {
+            <div class="table-wrap"><table class="consultation-table"><thead><tr><th>Pedido</th><th>Cliente</th><th>Data</th><th>Marmitas</th><th>Total</th><th>Pago</th></tr></thead><tbody>@foreach (var pedido in Resumo.Pedidos) { <tr><td><strong>#@pedido.Numero</strong></td><td>@pedido.NomeCliente</td><td>@pedido.DataPedido.ToString("dd/MM/yyyy")</td><td>@pedido.Itens.Sum(item => item.Quantidade)</td><td>@pedido.ValorTotal.ToString("C", Cultura)</td><td>@pedido.ValorPago.ToString("C", Cultura)</td></tr> }</tbody></table></div>
+        }
+    </article>
+</section>
+
+@code {
+    private static readonly CultureInfo Cultura = new("pt-BR");
+    private List<Cliente> Clientes { get; set; } = [];
+    private List<Marmita> Marmitas { get; set; } = [];
+    private List<Pedido> Pedidos { get; set; } = [];
+    private DateTime DataInicial { get; set; } = DateTime.Today.AddDays(-30);
+    private DateTime DataFinal { get; set; } = DateTime.Today;
+    private string ClienteSelecionado { get; set; } = string.Empty;
+    private string StatusSelecionado { get; set; } = string.Empty;
+    private string BuscaIngrediente { get; set; } = string.Empty;
+
+    private ConsultaResumo Resumo => ConsultaCalculator.Calcular(Pedidos, Marmitas, DataInicial, DataFinal, ClienteId, Status, BuscaIngrediente);
+    private Guid? ClienteId => Guid.TryParse(ClienteSelecionado, out var clienteId) ? clienteId : null;
+    private StatusPedido? Status => Enum.TryParse<StatusPedido>(StatusSelecionado, out var status) ? status : null;
+
+    protected override void OnInitialized()
+    {
+        Clientes = Data.LoadClientes();
+        Marmitas = Data.LoadMarmitas();
+        Pedidos = Data.LoadPedidos();
+    }
+
+    private static string TextoStatus(StatusPedido status) => status switch { StatusPedido.EmPreparacao => "Em preparação", _ => status.ToString() };
+    private static string FormatarQuantidade(IngredienteTotal ingrediente) => ingrediente.Unidade == UnidadeIngrediente.Gramas ? $"{ingrediente.Quantidade:N0} g" : $"{ingrediente.Quantidade:N2} un.";
+}

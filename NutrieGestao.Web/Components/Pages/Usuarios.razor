@@ -1,0 +1,140 @@
+@page "/usuarios"
+@attribute [Authorize]
+@inject AuthenticationService Authentication
+@inject AuthenticationStateProvider AuthenticationStateProvider
+@inject IHttpContextAccessor HttpContextAccessor
+
+<PageTitle>Usuários · Nutriê Gestão</PageTitle>
+
+<section class="page-heading">
+    <div><p class="eyebrow">ACESSO</p><h1>Usuários</h1><p>Crie contas, defina perfis e mantenha os acessos sob controle.</p></div>
+    @if (PodeGerenciar) { <button class="button button-primary" @onclick="NovoUsuario">+ Novo usuário</button> }
+</section>
+
+@if (!string.IsNullOrWhiteSpace(Feedback))
+{
+    <div class="feedback @(FeedbackIsError ? "feedback-error" : "feedback-success")" role="status">@Feedback</div>
+}
+
+<section class="content-grid @(Editando is not null ? "has-editor" : string.Empty)">
+    <article class="panel">
+        <div class="list-toolbar"><div class="search-field"><span aria-hidden="true">⌕</span><input @bind="Busca" @bind:event="oninput" placeholder="Buscar por nome, usuário ou e-mail" aria-label="Buscar usuário" /></div><span class="muted">@Filtrados.Count() conta(s)</span></div>
+        @if (!PodeGerenciar)
+        {
+            <div class="empty-state"><strong>Acesso restrito.</strong><span>Somente contas administradoras podem gerenciar usuários.</span></div>
+        }
+        else if (!Filtrados.Any())
+        {
+            <div class="empty-state"><strong>Nenhuma conta encontrada.</strong><span>Crie uma conta para outra pessoa da equipe.</span></div>
+        }
+        else
+        {
+            <div class="table-wrap"><table><thead><tr><th>Nome</th><th>Usuário</th><th>E-mail</th><th>Perfil</th><th>Status</th><th></th></tr></thead><tbody>
+                @foreach (var usuario in Filtrados)
+                {
+                    <tr><td><strong>@usuario.Nome</strong></td><td>@usuario.NomeUsuario</td><td>@usuario.Email</td><td>@TextoPerfil(usuario.Perfil)</td><td>@(usuario.Ativo ? "Ativo" : "Desativado")</td><td class="actions"><button class="text-button" @onclick="() => Editar(usuario)">Editar</button>@if (usuario.Id != AdministradorId) { <button class="text-button @(usuario.Ativo ? "danger" : string.Empty)" @onclick="() => PedirAlteracaoStatus(usuario)">@(usuario.Ativo ? "Desativar" : "Ativar")</button> }</td></tr>
+                }
+            </tbody></table></div>
+        }
+    </article>
+
+    @if (Editando is not null)
+    {
+        <aside class="panel editor-panel"><div class="editor-heading"><div><h2>@(Editando.Id == Guid.Empty ? "Novo usuário" : "Editar usuário")</h2><p class="muted">@(Editando.Id == Guid.Empty ? "A pessoa usará o nome de usuário para entrar." : "Alterações encerram a sessão desta conta.")</p></div><button type="button" class="icon-button" @onclick="FecharEditor" aria-label="Fechar">×</button></div>
+            <EditForm Model="Editando" OnValidSubmit="Salvar"><div class="form-grid"><label class="full">Nome *<InputText @bind-Value="Editando.Nome" maxlength="120" /></label><label>Usuário *<InputText @bind-Value="Editando.NomeUsuario" maxlength="40" autocomplete="username" /></label><label>E-mail *<input value="@EmailFormatado" @oninput="AtualizarEmail" type="email" inputmode="email" autocomplete="email" maxlength="180" /></label><label>Perfil *<InputSelect @bind-Value="Editando.Perfil"><option value="@PerfilUsuario.Operador">Operador</option><option value="@PerfilUsuario.Administrador">Administrador</option></InputSelect></label>
+                @if (Editando.Id == Guid.Empty)
+                {
+                    <label>Senha inicial *<InputText @bind-Value="Editando.Senha" type="password" autocomplete="new-password" maxlength="128" /><small>Ao menos 9 caracteres, com letras e números.</small></label><label>Confirmar senha *<InputText @bind-Value="Editando.ConfirmacaoSenha" type="password" autocomplete="new-password" maxlength="128" /></label>
+                }
+            </div><div class="editor-actions"><button type="button" class="button button-quiet" @onclick="FecharEditor">Cancelar</button><button type="submit" class="button button-primary">@(Editando.Id == Guid.Empty ? "Criar usuário" : "Salvar alterações")</button></div></EditForm>
+
+            @if (Editando.Id != Guid.Empty)
+            {
+                <details class="user-password-reset"><summary>Redefinir senha</summary><div class="form-grid"><label>Nova senha<InputText @bind-Value="Editando.Senha" type="password" autocomplete="new-password" maxlength="128" /></label><label>Confirmar nova senha<InputText @bind-Value="Editando.ConfirmacaoSenha" type="password" autocomplete="new-password" maxlength="128" /></label></div><div class="editor-actions"><button type="button" class="button button-quiet" @onclick="RedefinirSenha">Redefinir senha</button></div></details>
+            }
+        </aside>
+    }
+</section>
+
+@if (ConfirmacaoStatus is not null)
+{
+    <div class="modal-backdrop"><section class="confirm-dialog" role="alertdialog" aria-modal="true"><p class="eyebrow">CONFIRMAR ALTERAÇÃO</p><h2>@(ConfirmacaoStatus.Ativo ? "Desativar" : "Ativar") @ConfirmacaoStatus.Nome?</h2><p>@(ConfirmacaoStatus.Ativo ? "A pessoa perderá o acesso imediatamente." : "A pessoa poderá entrar novamente.")</p><div><button class="button button-quiet" @onclick="() => ConfirmacaoStatus = null">Cancelar</button><button class="button @(ConfirmacaoStatus.Ativo ? "button-danger" : "button-primary")" @onclick="ConfirmarAlteracaoStatus">@(ConfirmacaoStatus.Ativo ? "Desativar usuário" : "Ativar usuário")</button></div></section></div>
+}
+
+@code {
+    private List<UsuarioResumo> ListaUsuarios { get; set; } = [];
+    private UsuarioEdicao? Editando { get; set; }
+    private UsuarioResumo? ConfirmacaoStatus { get; set; }
+    [PersistentState]
+    public Guid AdministradorId { get; set; }
+    private string Busca { get; set; } = string.Empty;
+    private bool PodeGerenciar { get; set; }
+    private string? Feedback { get; set; }
+    private bool FeedbackIsError { get; set; }
+    private string EmailFormatado
+    {
+        get => Editando?.Email ?? string.Empty;
+        set { if (Editando is not null) Editando.Email = FormatacaoCadastro.FormatarEmail(value); }
+    }
+    private void AtualizarEmail(ChangeEventArgs evento) => EmailFormatado = evento.Value?.ToString() ?? string.Empty;
+    private IEnumerable<UsuarioResumo> Filtrados => ListaUsuarios.Where(usuario => string.IsNullOrWhiteSpace(Busca) || usuario.Nome.Contains(Busca, StringComparison.OrdinalIgnoreCase) || usuario.NomeUsuario.Contains(Busca, StringComparison.OrdinalIgnoreCase) || usuario.Email.Contains(Busca, StringComparison.OrdinalIgnoreCase)).OrderBy(usuario => usuario.Nome);
+
+    protected override async Task OnInitializedAsync()
+    {
+        if (AdministradorId == Guid.Empty && Guid.TryParse(HttpContextAccessor.HttpContext?.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, out var administradorDoContexto))
+            AdministradorId = administradorDoContexto;
+        if (AdministradorId == Guid.Empty)
+        {
+            var estado = await AuthenticationStateProvider.GetAuthenticationStateAsync();
+            if (Guid.TryParse(estado.User.FindFirst(System.Security.Claims.ClaimTypes.NameIdentifier)?.Value, out var administradorDoEstado)) AdministradorId = administradorDoEstado;
+        }
+        Carregar();
+    }
+
+    private void Carregar()
+    {
+        ListaUsuarios = Authentication.ListarUsuarios(AdministradorId).ToList();
+        PodeGerenciar = ListaUsuarios.Count > 0;
+    }
+    private void NovoUsuario() { Feedback = null; Editando = new UsuarioEdicao(); }
+    private void Editar(UsuarioResumo usuario) { Feedback = null; Editando = UsuarioEdicao.Criar(usuario); }
+    private void FecharEditor() => Editando = null;
+    private void Salvar()
+    {
+        if (Editando is null) return;
+        var resultado = Editando.Id == Guid.Empty
+            ? Authentication.CriarUsuario(AdministradorId, Editando.Nome, Editando.NomeUsuario, Editando.Email, Editando.Senha, Editando.ConfirmacaoSenha, Editando.Perfil)
+            : Authentication.AtualizarUsuario(AdministradorId, Editando.Id, Editando.Nome, Editando.NomeUsuario, Editando.Email, Editando.Perfil);
+        ExibirResultado(resultado);
+        if (resultado.Success) { Carregar(); Editando = null; }
+    }
+    private void PedirAlteracaoStatus(UsuarioResumo usuario) => ConfirmacaoStatus = usuario;
+    private void ConfirmarAlteracaoStatus()
+    {
+        if (ConfirmacaoStatus is null) return;
+        var resultado = Authentication.DefinirAtivo(AdministradorId, ConfirmacaoStatus.Id, !ConfirmacaoStatus.Ativo);
+        ExibirResultado(resultado);
+        if (resultado.Success) { Carregar(); ConfirmacaoStatus = null; }
+    }
+    private void RedefinirSenha()
+    {
+        if (Editando is null || Editando.Id == Guid.Empty) return;
+        var resultado = Authentication.RedefinirSenha(AdministradorId, Editando.Id, Editando.Senha, Editando.ConfirmacaoSenha);
+        ExibirResultado(resultado);
+        if (resultado.Success) { Editando.Senha = string.Empty; Editando.ConfirmacaoSenha = string.Empty; }
+    }
+    private void ExibirResultado(OperationResult resultado) { Feedback = resultado.Message; FeedbackIsError = !resultado.Success; }
+    private static string TextoPerfil(PerfilUsuario perfil) => perfil == PerfilUsuario.Administrador ? "Administrador" : "Operador";
+
+    private sealed class UsuarioEdicao
+    {
+        public Guid Id { get; set; }
+        public string Nome { get; set; } = string.Empty;
+        public string NomeUsuario { get; set; } = string.Empty;
+        public string Email { get; set; } = string.Empty;
+        public PerfilUsuario Perfil { get; set; } = PerfilUsuario.Operador;
+        public string Senha { get; set; } = string.Empty;
+        public string ConfirmacaoSenha { get; set; } = string.Empty;
+        public static UsuarioEdicao Criar(UsuarioResumo usuario) => new() { Id = usuario.Id, Nome = usuario.Nome, NomeUsuario = usuario.NomeUsuario, Email = usuario.Email, Perfil = usuario.Perfil };
+    }
+}
